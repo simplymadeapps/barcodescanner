@@ -2,10 +2,8 @@ package me.dm7.barcodescanner.zxing;
 
 import android.content.Context;
 import android.content.res.Configuration;
-import android.graphics.Rect;
 import android.hardware.Camera;
-import android.os.Handler;
-import android.os.Looper;
+import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.util.Log;
 
@@ -31,6 +29,8 @@ import me.dm7.barcodescanner.core.DisplayUtils;
 
 public class ZXingScannerView extends BarcodeScannerView {
     private static final String TAG = "ZXingScannerView";
+
+    public Camera globalCamera;
 
     public interface ResultHandler {
         void handleResult(Result rawResult);
@@ -94,8 +94,19 @@ public class ZXingScannerView extends BarcodeScannerView {
         mMultiFormatReader.setHints(hints);
     }
 
+    public long lastCameraPreviewScan = 0;
+
     @Override
     public void onPreviewFrame(byte[] data, Camera camera) {
+        long currentUpTime = SystemClock.uptimeMillis();
+        if(lastCameraPreviewScan+250 > currentUpTime) {
+            // Only handle results every 200ms
+            camera.setOneShotPreviewCallback(this);
+            return;
+        }
+
+        lastCameraPreviewScan = currentUpTime;
+
         if(mResultHandler == null) {
             return;
         }
@@ -149,22 +160,10 @@ public class ZXingScannerView extends BarcodeScannerView {
             final Result finalRawResult = rawResult;
 
             if (finalRawResult != null) {
-                Handler handler = new Handler(Looper.getMainLooper());
-                handler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        // Stopping the preview can take a little long.
-                        // So we want to set result handler to null to discard subsequent calls to
-                        // onPreviewFrame.
-                        ResultHandler tmpResultHandler = mResultHandler;
-                        mResultHandler = null;
-
-                        stopCameraPreview();
-                        if (tmpResultHandler != null) {
-                            tmpResultHandler.handleResult(finalRawResult);
-                        }
-                    }
-                });
+                // Let's try not stopping the camera here - we will stop it at the app end
+                // stopCameraPreview();
+                globalCamera = camera;
+                mResultHandler.handleResult(rawResult);
             } else {
                 camera.setOneShotPreviewCallback(this);
             }
@@ -180,16 +179,11 @@ public class ZXingScannerView extends BarcodeScannerView {
     }
 
     public PlanarYUVLuminanceSource buildLuminanceSource(byte[] data, int width, int height) {
-        Rect rect = getFramingRectInPreview(width, height);
-        if (rect == null) {
-            return null;
-        }
         // Go ahead and assume it's YUV rather than die.
         PlanarYUVLuminanceSource source = null;
 
         try {
-            source = new PlanarYUVLuminanceSource(data, width, height, rect.left, rect.top,
-                    rect.width(), rect.height(), false);
+            source = new PlanarYUVLuminanceSource(data, width, height, 0, 0, width, height, false);
         } catch(Exception e) {
         }
 

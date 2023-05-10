@@ -25,9 +25,14 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     private boolean mPreviewing = true;
     private boolean mAutoFocus = true;
     private boolean mSurfaceCreated = false;
-    private boolean mShouldScaleToFill = true;
+    private boolean mShouldScaleToFill = false;
     private Camera.PreviewCallback mPreviewCallback;
     private float mAspectTolerance = 0.1f;
+    private OnPreviewWindowChangedCallback previewWindowChangedCallback;
+
+    public interface OnPreviewWindowChangedCallback {
+        public void onChanged(int width, int height);
+    }
 
     public CameraPreview(Context context, CameraWrapper cameraWrapper, Camera.PreviewCallback previewCallback) {
         super(context);
@@ -37,6 +42,10 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     public CameraPreview(Context context, AttributeSet attrs, CameraWrapper cameraWrapper, Camera.PreviewCallback previewCallback) {
         super(context, attrs);
         init(cameraWrapper, previewCallback);
+    }
+
+    public void setOnPreviewWindowChangedCallback(OnPreviewWindowChangedCallback previewWindowChangedCallback) {
+        this.previewWindowChangedCallback = previewWindowChangedCallback;
     }
 
     public void init(CameraWrapper cameraWrapper, Camera.PreviewCallback previewCallback) {
@@ -66,11 +75,15 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
 
     @Override
     public void surfaceChanged(SurfaceHolder surfaceHolder, int i, int i2, int i3) {
+        Log.d("Surface Changed","Surface Changed");
         if(surfaceHolder.getSurface() == null) {
             return;
         }
         stopCameraPreview();
         showCameraPreview();
+
+        Log.d("W",getWidth()+"");
+        Log.d("H",getHeight()+"");
     }
 
     @Override
@@ -80,6 +93,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     }
 
     public void showCameraPreview() {
+        Log.d("Show Camera Preview","Show Camera Preview");
         if(mCameraWrapper != null) {
             try {
                 getHolder().addCallback(this);
@@ -127,6 +141,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     }
 
     public void setupCameraParameters() {
+        Log.d("Setup Camera Params","Setup Camera Params");
         Camera.Size optimalSize = getOptimalPreviewSize();
         Camera.Parameters parameters = mCameraWrapper.mCamera.getParameters();
         parameters.setPreviewSize(optimalSize.width, optimalSize.height);
@@ -135,14 +150,27 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     }
 
     private void adjustViewSize(Camera.Size cameraSize) {
+        Log.d("AVS","AVS");
+        Log.d("AVS-W",getWidth()+"");
+        Log.d("AVS-H",getHeight()+"");
+        Log.d("Optimal-W",cameraSize.width+"");
+        Log.d("Optimal-H",cameraSize.height+"");
+
         Point previewSize = convertSizeToLandscapeOrientation(new Point(getWidth(), getHeight()));
         float cameraRatio = ((float) cameraSize.width) / cameraSize.height;
         float screenRatio = ((float) previewSize.x) / previewSize.y;
-
         if (screenRatio > cameraRatio) {
             setViewSize((int) (previewSize.y * cameraRatio), previewSize.y);
         } else {
             setViewSize(previewSize.x, (int) (previewSize.x / cameraRatio));
+        }
+
+        if(previewWindowChangedCallback != null) {
+            Log.d("CALLBACK SET","CALLBACK");
+            previewWindowChangedCallback.onChanged(getWidth(), getHeight());
+        }
+        else {
+            Log.d("CALLBACK NOT SET","CALLBACK");
         }
     }
 
@@ -268,6 +296,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
                 }
             }
         }
+
         return optimalSize;
     }
 
